@@ -462,7 +462,7 @@ async fn send_sol(req: web::Json<SendSolRequest>) -> Result<HttpResponse> {
         data: Some(SendSolResponse {
             program_id: transfer_ix.program_id.to_string(),
             accounts: vec![from.to_string(), to.to_string()],
-            instruction_data: hex::encode(&transfer_ix.data),
+            instruction_data: BASE64.encode(&transfer_ix.data),
         }),
         error: None,
     };
