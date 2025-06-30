@@ -149,13 +149,9 @@ async fn generate_keypair() -> Result<HttpResponse> {
 // Create token
 async fn create_token(req: web::Json<CreateTokenRequest>) -> Result<HttpResponse> {
     if req.mintAuthority.is_empty() || req.mint.is_empty() {
-   return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
-     success: false,
-         
-     
-     
-     
-     data: None,
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
             error: Some("Missing required fields".to_string()),
         }));
     }
@@ -167,18 +163,12 @@ async fn create_token(req: web::Json<CreateTokenRequest>) -> Result<HttpResponse
             Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
                 success: false,
                 data: None,
-
-
                 error: Some("Invalid mint authority public key".to_string()),
             })),
         },
         Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
-          
-          
             success: false,
             data: None,
-
-
             error: Some("Invalid mint authority base58 string".to_string()),
         })),
     };
@@ -205,8 +195,6 @@ async fn create_token(req: web::Json<CreateTokenRequest>) -> Result<HttpResponse
         &mint,
         &mint_authority,
         None,
-
-
         req.decimals,
     ).map_err(|e| {
         actix_web::error::ErrorBadRequest(format!("Failed to create token: {}", e))
@@ -216,8 +204,7 @@ async fn create_token(req: web::Json<CreateTokenRequest>) -> Result<HttpResponse
         success: true,
         data: Some(CreateTokenResponse {
             program_id: create_ix.program_id.to_string(),
-
-    accounts: create_ix.accounts.iter().map(|acc| AccountInfo {
+            accounts: create_ix.accounts.iter().map(|acc| AccountInfo {
                 pubkey: acc.pubkey.to_string(),
                 is_signer: acc.is_signer,
                 is_writable: acc.is_writable,
@@ -264,7 +251,7 @@ async fn mint_token(req: web::Json<MintTokenRequest>) -> Result<HttpResponse> {
         })),
     };
 
- let destination = match bs58::decode(&req.destination).into_vec() {
+    let destination = match bs58::decode(&req.destination).into_vec() {
         Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
             Ok(pk) => pk,
             Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
@@ -616,13 +603,13 @@ mod tests {
         let req = test::TestRequest::post().uri("/keypair").to_request();
         let resp: ApiResponse<KeypairResponse> = test::call_and_read_body_json(&app, req).await;
 
- assert!(resp.success);
-  assert!(resp.data.is_some());
+        assert!(resp.success);
+        assert!(resp.data.is_some());
         assert!(resp.error.is_none());
 
         let keypair = resp.data.unwrap();
         assert!(!keypair.pubkey.is_empty());
-      assert!(!keypair.secret.is_empty());
+        assert!(!keypair.secret.is_empty());
     }
 
     // Test token creation
@@ -643,13 +630,13 @@ mod tests {
 
         let resp: ApiResponse<CreateTokenResponse> = test::call_and_read_body_json(&app, req).await;
 
-assert!(resp.success);
+        assert!(resp.success);
         assert!(resp.data.is_some());
-       assert!(resp.error.is_none());
+        assert!(resp.error.is_none());
 
         let token = resp.data.unwrap();
         assert!(!token.program_id.is_empty());
-    assert!(!token.accounts.is_empty());
+        assert!(!token.accounts.is_empty());
         assert!(!token.instruction_data.is_empty());
     }
 
@@ -802,7 +789,7 @@ assert!(resp.success);
         assert!(resp.data.is_some());
         assert!(resp.error.is_none());
 
- let transfer_resp = resp.data.unwrap();
+        let transfer_resp = resp.data.unwrap();
         assert!(!transfer_resp.program_id.is_empty());
         assert!(!transfer_resp.accounts.is_empty());
         assert!(!transfer_resp.instruction_data.is_empty());
