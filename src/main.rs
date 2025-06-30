@@ -6,6 +6,8 @@ use solana_sdk::{
     bs58,
     pubkey::Pubkey,
     instruction::{AccountMeta, Instruction},
+    system_instruction,
+    signature::Signature,
 };
 use spl_token::instruction as token_instruction;
 use std::env;
@@ -73,6 +75,49 @@ struct SignMessageResponse {
     signature: String,
     public_key: String,
     message: String,
+}
+
+#[derive(Deserialize)]
+struct VerifyMessageRequest {
+    message: String,
+    signature: String,
+    pubkey: String,
+}
+
+#[derive(Serialize)]
+struct VerifyMessageResponse {
+    valid: bool,
+    message: String,
+    pubkey: String,
+}
+
+#[derive(Deserialize)]
+struct SendSolRequest {
+    from: String,
+    to: String,
+    lamports: u64,
+}
+
+#[derive(Serialize)]
+struct SendSolResponse {
+    program_id: String,
+    accounts: Vec<String>,
+    instruction_data: String,
+}
+
+#[derive(Deserialize)]
+struct SendTokenRequest {
+    destination: String,
+    mint: String,
+    owner: String,
+    amount: u64,
+}
+
+#[derive(Serialize)]
+struct SendTokenResponse {
+    program_id: String,
+    accounts: Vec<AccountInfo>,
+    instruction_data: String,
 }
 
 async fn generate_keypair() -> Result<HttpResponse> {
@@ -278,6 +323,233 @@ async fn sign_message(req: web::Json<SignMessageRequest>) -> Result<HttpResponse
     Ok(HttpResponse::Ok().json(response))
 }
 
+async fn verify_message(req: web::Json<VerifyMessageRequest>) -> Result<HttpResponse> {
+    // Validate request fields
+    if req.message.is_empty() || req.signature.is_empty() || req.pubkey.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Missing required fields".to_string()),
+        }));
+    }
+
+    // Decode public key
+    let pubkey = match bs58::decode(&req.pubkey).into_vec() {
+        Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
+            Ok(pk) => pk,
+            Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Invalid public key".to_string()),
+            })),
+        },
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid public key format".to_string()),
+        })),
+    };
+
+    // Decode signature from base64
+    let signature_bytes = match base64::decode(&req.signature) {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid signature format".to_string()),
+        })),
+    };
+
+    let signature = match Signature::try_from(signature_bytes.as_slice()) {
+        Ok(sig) => sig,
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid signature".to_string()),
+        })),
+    };
+
+    // Verify the signature
+    let message_bytes = req.message.as_bytes();
+    let valid = signature.verify(pubkey.as_ref(), message_bytes);
+
+    let response = ApiResponse {
+        success: true,
+        data: Some(VerifyMessageResponse {
+            valid,
+            message: req.message.clone(),
+            pubkey: req.pubkey.clone(),
+        }),
+        error: None,
+    };
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
+async fn send_sol(req: web::Json<SendSolRequest>) -> Result<HttpResponse> {
+    // Validate lamports amount (must be greater than 0)
+    if req.lamports == 0 {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Amount must be greater than 0".to_string()),
+        }));
+    }
+
+    // Parse from address
+    let from_pubkey = match bs58::decode(&req.from).into_vec() {
+        Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
+            Ok(pk) => pk,
+            Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Invalid sender address".to_string()),
+            })),
+        },
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid sender address format".to_string()),
+        })),
+    };
+
+    // Parse to address
+    let to_pubkey = match bs58::decode(&req.to).into_vec() {
+        Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
+            Ok(pk) => pk,
+            Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Invalid recipient address".to_string()),
+            })),
+        },
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid recipient address format".to_string()),
+        })),
+    };
+
+    // Create transfer instruction
+    let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, req.lamports);
+
+    let response = ApiResponse {
+        success: true,
+        data: Some(SendSolResponse {
+            program_id: instruction.program_id.to_string(),
+            accounts: instruction.accounts.iter()
+                .map(|acc| acc.pubkey.to_string())
+                .collect(),
+            instruction_data: base64::encode(&instruction.data),
+        }),
+        error: None,
+    };
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
+async fn send_token(req: web::Json<SendTokenRequest>) -> Result<HttpResponse> {
+    // Validate amount
+    if req.amount == 0 {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Amount must be greater than 0".to_string()),
+        }));
+    }
+
+    // Parse destination address
+    let destination = match bs58::decode(&req.destination).into_vec() {
+        Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
+            Ok(pk) => pk,
+            Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Invalid destination address".to_string()),
+            })),
+        },
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid destination address format".to_string()),
+        })),
+    };
+
+    // Parse mint address
+    let mint = match bs58::decode(&req.mint).into_vec() {
+        Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
+            Ok(pk) => pk,
+            Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Invalid mint address".to_string()),
+            })),
+        },
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid mint address format".to_string()),
+        })),
+    };
+
+    // Parse owner address
+    let owner = match bs58::decode(&req.owner).into_vec() {
+        Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
+            Ok(pk) => pk,
+            Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                error: Some("Invalid owner address".to_string()),
+            })),
+        },
+        Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Invalid owner address format".to_string()),
+        })),
+    };
+
+    // Get source token account (owner's ATA)
+    let source = spl_associated_token_account::get_associated_token_address(
+        &owner,
+        &mint,
+    );
+
+    // Get destination token account (destination's ATA)
+    let dest = spl_associated_token_account::get_associated_token_address(
+        &destination,
+        &mint,
+    );
+
+    // Create transfer instruction
+    let transfer_ix = token_instruction::transfer(
+        &spl_token::id(),
+        &source,
+        &dest,
+        &owner,
+        &[],
+        req.amount,
+    ).map_err(|e| {
+        actix_web::error::ErrorBadRequest(format!("Failed to create transfer instruction: {}", e))
+    })?;
+
+    let response = ApiResponse {
+        success: true,
+        data: Some(SendTokenResponse {
+            program_id: transfer_ix.program_id.to_string(),
+            accounts: transfer_ix.accounts.iter().map(|acc| AccountInfo {
+                pubkey: acc.pubkey.to_string(),
+                is_signer: acc.is_signer,
+                is_writable: acc.is_writable,
+            }).collect(),
+            instruction_data: base64::encode(&transfer_ix.data),
+        }),
+        error: None,
+    };
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Get port from environment (Railway will provide this)
@@ -292,6 +564,9 @@ async fn main() -> std::io::Result<()> {
             .route("/token/create", web::post().to(create_token))
             .route("/token/mint", web::post().to(mint_token))
             .route("/message/sign", web::post().to(sign_message))
+            .route("/message/verify", web::post().to(verify_message))
+            .route("/send/sol", web::post().to(send_sol))
+            .route("/send/token", web::post().to(send_token))
     })
     .bind(bind_address)?
     .run()
