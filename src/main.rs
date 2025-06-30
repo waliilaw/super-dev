@@ -13,6 +13,7 @@ use spl_token::instruction as token_instruction;
 use spl_associated_token_account::get_associated_token_address;
 use std::env;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use hex;
 
 // Request shapes
 #[derive(Deserialize, Serialize)]
@@ -474,7 +475,7 @@ async fn send_sol(req: web::Json<SendSolRequest>) -> Result<HttpResponse> {
         data: Some(SendSolResponse {
             program_id: transfer_ix.program_id.to_string(),
             accounts: vec![from.to_string(), to.to_string()],
-            instruction_data: BASE64.encode(&transfer_ix.data),
+            instruction_data: hex::encode(&transfer_ix.data),
         }),
         error: None,
     };
