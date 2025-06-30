@@ -10,8 +10,9 @@ use solana_sdk::{
     signature::Signature,
 };
 use spl_token::instruction as token_instruction;
+use spl_associated_token_account::get_associated_token_address;
 use std::env;
-use base64;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 // Request shapes
 #[derive(Deserialize)]
@@ -123,7 +124,7 @@ async fn generate_keypair() -> Result<HttpResponse> {
         success: true,
         data: Some(KeypairResponse {
             public_key: keypair.pubkey().to_string(),
-            private_key: bs58.encode(keypair.secret()).into_string(),
+            private_key: bs58::encode(keypair.secret()).into_string(),
         }),
         error: None,
     };
@@ -160,7 +161,7 @@ async fn create_token(req: web::Json<CreateTokenRequest>) -> Result<HttpResponse
                 is_signer: acc.is_signer,
                 is_writable: acc.is_writable,
             }).collect(),
-            instruction_data: base64::encode(&create_ix.data),
+            instruction_data: BASE64.encode(&create_ix.data),
         }),
         error: None,
     };
@@ -238,7 +239,7 @@ async fn mint_token(req: web::Json<MintTokenRequest>) -> Result<HttpResponse> {
                 is_signer: acc.is_signer,
                 is_writable: acc.is_writable,
             }).collect(),
-            instruction_data: base64::encode(&mint_ix.data),
+            instruction_data: BASE64.encode(&mint_ix.data),
         }),
         error: None,
     };
@@ -392,7 +393,7 @@ async fn send_sol(req: web::Json<SendSolRequest>) -> Result<HttpResponse> {
                 is_signer: acc.is_signer,
                 is_writable: acc.is_writable,
             }).collect(),
-            instruction_data: base64::encode(&transfer_ix.data),
+            instruction_data: BASE64.encode(&transfer_ix.data),
         }),
         error: None,
     };
@@ -463,13 +464,13 @@ async fn send_token(req: web::Json<SendTokenRequest>) -> Result<HttpResponse> {
     };
 
     // Get sender ATA
-    let source = spl_associated_token_account::get_associated_token_address(
+    let source = get_associated_token_address(
         &owner,
         &mint,
     );
 
     // Get recipient ATA
-    let dest = spl_associated_token_account::get_associated_token_address(
+    let dest = get_associated_token_address(
         &destination,
         &mint,
     );
@@ -496,7 +497,7 @@ async fn send_token(req: web::Json<SendTokenRequest>) -> Result<HttpResponse> {
                 is_signer: acc.is_signer,
                 is_writable: acc.is_writable,
             }).collect(),
-            instruction_data: base64::encode(&transfer_ix.data),
+            instruction_data: BASE64.encode(&transfer_ix.data),
         }),
         error: None,
     };
