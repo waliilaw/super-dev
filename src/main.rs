@@ -419,6 +419,14 @@ async fn verify_message(req: web::Json<VerifyMessageRequest>) -> Result<HttpResp
 
 // Send SOL
 async fn send_sol(req: web::Json<SendSolRequest>) -> Result<HttpResponse> {
+    if req.from.is_empty() || req.to.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Missing required fields".to_string()),
+        }));
+    }
+
     if req.lamports == 0 {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
             success: false,
@@ -465,9 +473,7 @@ async fn send_sol(req: web::Json<SendSolRequest>) -> Result<HttpResponse> {
         success: true,
         data: Some(SendSolResponse {
             program_id: transfer_ix.program_id.to_string(),
-            accounts: transfer_ix.accounts.iter()
-                .map(|acc| acc.pubkey.to_string())
-                .collect(),
+            accounts: vec![from.to_string(), to.to_string()],
             instruction_data: BASE64.encode(&transfer_ix.data),
         }),
         error: None,
