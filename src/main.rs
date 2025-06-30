@@ -98,7 +98,7 @@ struct MintTokenResponse {
 #[derive(Serialize, Deserialize)]
 struct SignMessageResponse {
     signature: String,
-    public_key: String,
+    pubkey: String,
     message: String,
 }
 
@@ -117,9 +117,15 @@ struct SendSolResponse {
 }
 
 #[derive(Serialize, Deserialize)]
+struct SendTokenAccountInfo {
+    pubkey: String,
+    isSigner: bool,
+}
+
+#[derive(Serialize, Deserialize)]
 struct SendTokenResponse {
     program_id: String,
-    accounts: Vec<AccountInfo>,
+    accounts: Vec<SendTokenAccountInfo>,
     instruction_data: String,
 }
 
@@ -322,7 +328,7 @@ async fn sign_message(req: web::Json<SignMessageRequest>) -> Result<HttpResponse
         success: true,
         data: Some(SignMessageResponse {
             signature: BASE64.encode(signature.as_ref()),
-            public_key: keypair.pubkey().to_string(),
+            pubkey: keypair.pubkey().to_string(),
             message: req.message.clone(),
         }),
         error: None,
@@ -524,10 +530,9 @@ async fn send_token(req: web::Json<SendTokenRequest>) -> Result<HttpResponse> {
         success: true,
         data: Some(SendTokenResponse {
             program_id: transfer_ix.program_id.to_string(),
-            accounts: transfer_ix.accounts.iter().map(|acc| AccountInfo {
+            accounts: transfer_ix.accounts.iter().map(|acc| SendTokenAccountInfo {
                 pubkey: acc.pubkey.to_string(),
-                is_signer: acc.is_signer,
-                is_writable: acc.is_writable,
+                isSigner: acc.is_signer,
             }).collect(),
             instruction_data: BASE64.encode(&transfer_ix.data),
         }),
