@@ -147,6 +147,14 @@ async fn generate_keypair() -> Result<HttpResponse> {
 
 // Create token
 async fn create_token(req: web::Json<CreateTokenRequest>) -> Result<HttpResponse> {
+    if req.mintAuthority.is_empty() || req.mint.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Missing required fields".to_string()),
+        }));
+    }
+
     // Parse mint authority
     let mint_authority = match bs58::decode(&req.mintAuthority).into_vec() {
         Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
@@ -210,6 +218,14 @@ async fn create_token(req: web::Json<CreateTokenRequest>) -> Result<HttpResponse
 
 // Mint token
 async fn mint_token(req: web::Json<MintTokenRequest>) -> Result<HttpResponse> {
+    if req.mint.is_empty() || req.destination.is_empty() || req.authority.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Missing required fields".to_string()),
+        }));
+    }
+
     if req.amount == 0 {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
             success: false,
