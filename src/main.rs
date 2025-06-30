@@ -98,7 +98,7 @@ struct MintTokenResponse {
 #[derive(Serialize, Deserialize)]
 struct SignMessageResponse {
     signature: String,
-    public_key: String,
+    pubkey: String,
     message: String,
 }
 
@@ -357,7 +357,7 @@ async fn sign_message(req: web::Json<SignMessageRequest>) -> Result<HttpResponse
         success: true,
         data: Some(SignMessageResponse {
             signature: BASE64.encode(signature.as_ref()),
-            public_key: keypair.pubkey().to_string(),
+            pubkey: keypair.pubkey().to_string(),
             message: req.message.clone(),
         }),
         error: None,
