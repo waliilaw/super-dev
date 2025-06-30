@@ -237,10 +237,8 @@ async fn mint_token(req: web::Json<MintTokenRequest>) -> Result<HttpResponse> {
             data: None,
             error: Some("Missing required fields".to_string()),
         }));
-        
+    }
 
-//Review krna hai 
-        
     if req.amount == 0 {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
             success: false,
@@ -583,10 +581,12 @@ async fn main() -> std::io::Result<()> {
     
     HttpServer::new(|| {
         App::new()
-            .route("/keypair", web::post().to(generate_keypair))     .route("/token/create", web::post().to(create_token))
+            .route("/keypair", web::post().to(generate_keypair))
+            .route("/token/create", web::post().to(create_token))
             .route("/token/mint", web::post().to(mint_token))
-    .route("/message/sign", web::post().to(sign_message))
-            .route("/message/verify", web::post().to(verify_message))   .route("/send/sol", web::post().to(send_sol))
+            .route("/message/sign", web::post().to(sign_message))
+            .route("/message/verify", web::post().to(verify_message))
+            .route("/send/sol", web::post().to(send_sol))
             .route("/send/token", web::post().to(send_token))
     })
     .bind(bind_address)?
@@ -795,7 +795,7 @@ assert!(resp.success);
         assert!(resp.data.is_some());
         assert!(resp.error.is_none());
 
-        let transfer_resp = resp.data.unwrap();
+ let transfer_resp = resp.data.unwrap();
         assert!(!transfer_resp.program_id.is_empty());
         assert!(!transfer_resp.accounts.is_empty());
         assert!(!transfer_resp.instruction_data.is_empty());
