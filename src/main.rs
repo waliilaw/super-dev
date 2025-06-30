@@ -356,6 +356,14 @@ async fn sign_message(req: web::Json<SignMessageRequest>) -> Result<HttpResponse
 
 // Verify message
 async fn verify_message(req: web::Json<VerifyMessageRequest>) -> Result<HttpResponse> {
+    if req.message.is_empty() || req.signature.is_empty() || req.pubkey.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
+            success: false,
+            data: None,
+            error: Some("Missing required fields".to_string()),
+        }));
+    }
+
     let pubkey = match bs58::decode(&req.pubkey).into_vec() {
         Ok(bytes) => match Pubkey::try_from(bytes.as_slice()) {
             Ok(pk) => pk,
@@ -372,7 +380,7 @@ async fn verify_message(req: web::Json<VerifyMessageRequest>) -> Result<HttpResp
         })),
     };
 
-    let signature_bytes = match base64::decode(&req.signature) {
+    let signature_bytes = match bs58::decode(&req.signature).into_vec() {
         Ok(bytes) => bytes,
         Err(_) => return Ok(HttpResponse::BadRequest().json(ApiResponse::<()> {
             success: false,
