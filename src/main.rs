@@ -15,39 +15,39 @@ use std::env;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 // Request shapes
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct CreateTokenRequest {
     decimals: u8,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct MintTokenRequest {
     mint: String,
     destination: String,
     amount: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct SignMessageRequest {
     message: String,
     private_key: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct VerifyMessageRequest {
     message: String,
     signature: String,
     public_key: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct SendSolRequest {
     to: String,
     from: String,
     amount: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct SendTokenRequest {
     destination: String,
     mint: String,
@@ -56,58 +56,58 @@ struct SendTokenRequest {
 }
 
 // Response shapes
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct ApiResponse<T> {
     success: bool,
     data: Option<T>,
     error: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct KeypairResponse {
     public_key: String,
     private_key: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct AccountInfo {
     pubkey: String,
     is_signer: bool,
     is_writable: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct CreateTokenResponse {
     program_id: String,
     accounts: Vec<AccountInfo>,
     instruction_data: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct MintTokenResponse {
     program_id: String,
     accounts: Vec<AccountInfo>,
     instruction_data: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct SignMessageResponse {
     signature: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct VerifyMessageResponse {
     is_valid: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct SendSolResponse {
     program_id: String,
     accounts: Vec<AccountInfo>,
     instruction_data: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct SendTokenResponse {
     program_id: String,
     accounts: Vec<AccountInfo>,
@@ -529,4 +529,259 @@ async fn main() -> std::io::Result<()> {
     .bind(bind_address)?
     .run()
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{test, App};
+
+    // Test keypair generation
+    #[actix_web::test]
+    async fn test_generate_keypair() {
+        let app = test::init_service(
+            App::new().service(web::resource("/keypair").route(web::post().to(generate_keypair)))
+        ).await;
+
+        let req = test::TestRequest::post().uri("/keypair").to_request();
+        let resp: ApiResponse<KeypairResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.success);
+        assert!(resp.data.is_some());
+        assert!(resp.error.is_none());
+
+        let keypair = resp.data.unwrap();
+        assert!(!keypair.public_key.is_empty());
+        assert!(!keypair.private_key.is_empty());
+    }
+
+    // Test token creation
+    #[actix_web::test]
+    async fn test_create_token() {
+        let app = test::init_service(
+            App::new().service(web::resource("/token/create").route(web::post().to(create_token)))
+        ).await;
+
+        let req = test::TestRequest::post()
+            .uri("/token/create")
+            .set_json(CreateTokenRequest { decimals: 9 })
+            .to_request();
+
+        let resp: ApiResponse<CreateTokenResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.success);
+        assert!(resp.data.is_some());
+        assert!(resp.error.is_none());
+
+        let token = resp.data.unwrap();
+        assert!(!token.program_id.is_empty());
+        assert!(!token.accounts.is_empty());
+        assert!(!token.instruction_data.is_empty());
+    }
+
+    // Test token minting
+    #[actix_web::test]
+    async fn test_mint_token() {
+        let app = test::init_service(
+            App::new().service(web::resource("/token/mint").route(web::post().to(mint_token)))
+        ).await;
+
+        // Generate a valid keypair for testing
+        let mint_kp = Keypair::new();
+        let dest_kp = Keypair::new();
+
+        let req = test::TestRequest::post()
+            .uri("/token/mint")
+            .set_json(MintTokenRequest {
+                mint: mint_kp.pubkey().to_string(),
+                destination: dest_kp.pubkey().to_string(),
+                amount: 1000000,
+            })
+            .to_request();
+
+        let resp: ApiResponse<MintTokenResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.success);
+        assert!(resp.data.is_some());
+        assert!(resp.error.is_none());
+
+        let mint_resp = resp.data.unwrap();
+        assert!(!mint_resp.program_id.is_empty());
+        assert!(!mint_resp.accounts.is_empty());
+        assert!(!mint_resp.instruction_data.is_empty());
+    }
+
+    // Test message signing
+    #[actix_web::test]
+    async fn test_sign_message() {
+        let app = test::init_service(
+            App::new().service(web::resource("/message/sign").route(web::post().to(sign_message)))
+        ).await;
+
+        let keypair = Keypair::new();
+        let message = "Hello, Solana!";
+
+        let req = test::TestRequest::post()
+            .uri("/message/sign")
+            .set_json(SignMessageRequest {
+                message: message.to_string(),
+                private_key: bs58::encode(&keypair.to_bytes()).into_string(),
+            })
+            .to_request();
+
+        let resp: ApiResponse<SignMessageResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.success, "Failed to sign message: {:?}", resp.error);
+        assert!(resp.data.is_some());
+        assert!(resp.error.is_none());
+
+        let sign_resp = resp.data.unwrap();
+        assert!(!sign_resp.signature.is_empty());
+    }
+
+    // Test message verification
+    #[actix_web::test]
+    async fn test_verify_message() {
+        let app = test::init_service(
+            App::new().service(web::resource("/message/verify").route(web::post().to(verify_message)))
+        ).await;
+
+        let keypair = Keypair::new();
+        let message = "Hello, Solana!";
+        let signature = keypair.sign_message(message.as_bytes());
+
+        let req = test::TestRequest::post()
+            .uri("/message/verify")
+            .set_json(VerifyMessageRequest {
+                message: message.to_string(),
+                signature: bs58::encode(signature.as_ref()).into_string(),
+                public_key: keypair.pubkey().to_string(),
+            })
+            .to_request();
+
+        let resp: ApiResponse<VerifyMessageResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.success);
+        assert!(resp.data.is_some());
+        assert!(resp.error.is_none());
+
+        let verify_resp = resp.data.unwrap();
+        assert!(verify_resp.is_valid);
+    }
+
+    // Test SOL transfer
+    #[actix_web::test]
+    async fn test_send_sol() {
+        let app = test::init_service(
+            App::new().service(web::resource("/send/sol").route(web::post().to(send_sol)))
+        ).await;
+
+        let from_kp = Keypair::new();
+        let to_kp = Keypair::new();
+
+        let req = test::TestRequest::post()
+            .uri("/send/sol")
+            .set_json(SendSolRequest {
+                from: from_kp.pubkey().to_string(),
+                to: to_kp.pubkey().to_string(),
+                amount: 1000000,
+            })
+            .to_request();
+
+        let resp: ApiResponse<SendSolResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.success);
+        assert!(resp.data.is_some());
+        assert!(resp.error.is_none());
+
+        let transfer_resp = resp.data.unwrap();
+        assert!(!transfer_resp.program_id.is_empty());
+        assert!(!transfer_resp.accounts.is_empty());
+        assert!(!transfer_resp.instruction_data.is_empty());
+    }
+
+    // Test token transfer
+    #[actix_web::test]
+    async fn test_send_token() {
+        let app = test::init_service(
+            App::new().service(web::resource("/send/token").route(web::post().to(send_token)))
+        ).await;
+
+        let owner_kp = Keypair::new();
+        let dest_kp = Keypair::new();
+        let mint_kp = Keypair::new();
+
+        let req = test::TestRequest::post()
+            .uri("/send/token")
+            .set_json(SendTokenRequest {
+                destination: dest_kp.pubkey().to_string(),
+                mint: mint_kp.pubkey().to_string(),
+                owner: owner_kp.pubkey().to_string(),
+                amount: 1000000,
+            })
+            .to_request();
+
+        let resp: ApiResponse<SendTokenResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.success);
+        assert!(resp.data.is_some());
+        assert!(resp.error.is_none());
+
+        let transfer_resp = resp.data.unwrap();
+        assert!(!transfer_resp.program_id.is_empty());
+        assert!(!transfer_resp.accounts.is_empty());
+        assert!(!transfer_resp.instruction_data.is_empty());
+    }
+
+    // Test error cases
+    #[actix_web::test]
+    async fn test_mint_token_zero_amount() {
+        let app = test::init_service(
+            App::new().service(web::resource("/token/mint").route(web::post().to(mint_token)))
+        ).await;
+
+        let mint_kp = Keypair::new();
+        let dest_kp = Keypair::new();
+
+        let req = test::TestRequest::post()
+            .uri("/token/mint")
+            .set_json(MintTokenRequest {
+                mint: mint_kp.pubkey().to_string(),
+                destination: dest_kp.pubkey().to_string(),
+                amount: 0,
+            })
+            .to_request();
+
+        let resp: ApiResponse<MintTokenResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(!resp.success);
+        assert!(resp.data.is_none());
+        assert!(resp.error.is_some());
+        assert_eq!(resp.error.unwrap(), "Zero amount".to_string());
+    }
+
+    #[actix_web::test]
+    async fn test_mint_token_invalid_address() {
+        let app = test::init_service(
+            App::new().service(web::resource("/token/mint").route(web::post().to(mint_token)))
+        ).await;
+
+        let dest_kp = Keypair::new();
+
+        let req = test::TestRequest::post()
+            .uri("/token/mint")
+            .set_json(MintTokenRequest {
+                mint: "invalid_address".to_string(),
+                destination: dest_kp.pubkey().to_string(),
+                amount: 1000000,
+            })
+            .to_request();
+
+        let resp: ApiResponse<MintTokenResponse> = test::call_and_read_body_json(&app, req).await;
+
+        assert!(!resp.success);
+        assert!(resp.data.is_none());
+        assert!(resp.error.is_some());
+        assert_eq!(resp.error.unwrap(), "Bad mint format".to_string());
+    }
 }
