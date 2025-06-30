@@ -117,7 +117,7 @@ struct SendSolResponse {
 }
 
 #[derive(Serialize, Deserialize)]
-struct SendTokenAccountInfo {
+struct TokenAccountInfo {
     pubkey: String,
     isSigner: bool,
 }
@@ -125,7 +125,7 @@ struct SendTokenAccountInfo {
 #[derive(Serialize, Deserialize)]
 struct SendTokenResponse {
     program_id: String,
-    accounts: Vec<SendTokenAccountInfo>,
+    accounts: Vec<TokenAccountInfo>,
     instruction_data: String,
 }
 
@@ -565,7 +565,7 @@ async fn send_token(req: web::Json<SendTokenRequest>) -> Result<HttpResponse> {
         success: true,
         data: Some(SendTokenResponse {
             program_id: transfer_ix.program_id.to_string(),
-            accounts: transfer_ix.accounts.iter().map(|acc| SendTokenAccountInfo {
+            accounts: transfer_ix.accounts.iter().map(|acc| TokenAccountInfo {
                 pubkey: acc.pubkey.to_string(),
                 isSigner: acc.is_signer,
             }).collect(),
