@@ -65,8 +65,8 @@ struct ApiResponse<T> {
 
 #[derive(Serialize, Deserialize)]
 struct KeypairResponse {
-    public_key: String,
-    private_key: String,
+    pubkey: String,
+    secret: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -93,11 +93,15 @@ struct MintTokenResponse {
 #[derive(Serialize, Deserialize)]
 struct SignMessageResponse {
     signature: String,
+    public_key: String,
+    message: String,
 }
 
 #[derive(Serialize, Deserialize)]
 struct VerifyMessageResponse {
-    is_valid: bool,
+    valid: bool,
+    message: String,
+    pubkey: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -123,8 +127,8 @@ async fn generate_keypair() -> Result<HttpResponse> {
     let response = ApiResponse {
         success: true,
         data: Some(KeypairResponse {
-            public_key: keypair.pubkey().to_string(),
-            private_key: bs58::encode(keypair.secret()).into_string(),
+            pubkey: keypair.pubkey().to_string(),
+            secret: bs58::encode(&keypair.to_bytes()).into_string(),
         }),
         error: None,
     };
@@ -277,6 +281,8 @@ async fn sign_message(req: web::Json<SignMessageRequest>) -> Result<HttpResponse
         success: true,
         data: Some(SignMessageResponse {
             signature: bs58::encode(signature.as_ref()).into_string(),
+            public_key: keypair.pubkey().to_string(),
+            message: req.message.clone(),
         }),
         error: None,
     };
@@ -321,13 +327,15 @@ async fn verify_message(req: web::Json<VerifyMessageRequest>) -> Result<HttpResp
     };
 
     // Verify signature
-    let is_valid = signature.verify(pubkey.as_ref(), req.message.as_bytes());
+    let valid = signature.verify(pubkey.as_ref(), req.message.as_bytes());
 
     // Pack response
     let response = ApiResponse {
         success: true,
         data: Some(VerifyMessageResponse {
-            is_valid,
+            valid,
+            message: req.message.clone(),
+            pubkey: req.public_key.clone(),
         }),
         error: None,
     };
@@ -551,8 +559,8 @@ mod tests {
         assert!(resp.error.is_none());
 
         let keypair = resp.data.unwrap();
-        assert!(!keypair.public_key.is_empty());
-        assert!(!keypair.private_key.is_empty());
+        assert!(!keypair.pubkey.is_empty());
+        assert!(!keypair.secret.is_empty());
     }
 
     // Test token creation
@@ -666,7 +674,7 @@ mod tests {
         assert!(resp.error.is_none());
 
         let verify_resp = resp.data.unwrap();
-        assert!(verify_resp.is_valid);
+        assert!(verify_resp.valid);
     }
 
     // Test SOL transfer
